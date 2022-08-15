@@ -5,6 +5,8 @@ from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import linalg
+from scipy.optimize import least_squares, curve_fit
+from sklearn.model_selection import ParameterGrid
 
 CallableArg = Union[float, np.ndarray]
 
@@ -18,16 +20,19 @@ def configure_logging():
     logging.Formatter.converter = time.gmtime
 
 
-def func(x: CallableArg, beta: np.ndarray):
-    return np.exp(beta[0] * x + beta[1])
+# def func(x: CallableArg, beta: np.ndarray):
+#     return np.exp(beta[0] * x + beta[1])
 
 
 # def func(x: CallableArg, beta: np.ndarray):
 #     return beta[0] * x + beta[1]
 
 
-# def func(x: CallableArg, beta: np.ndarray):
-#     return beta[0] * np.cos(beta[1] * x) + beta[1] * np.sin(beta[0] * x)
+def func(x: CallableArg, beta: np.ndarray):
+    return beta[0] * np.cos(beta[1] * x) + beta[1] * np.sin(beta[0] * x)
+
+def func_(x, a, b):
+    return a * np.cos(b * x) + b * np.sin(a * x)
 
 
 # def func(x: CallableArg, beta: np.ndarray):
@@ -76,7 +81,7 @@ def run_single_iteration(x: np.ndarray, y: np.ndarray, beta: np.ndarray, lmbd: f
     return beta_upd, curr_error
 
 
-def levenberg_marquardt(x: np.ndarray, y: np.ndarray, init_beta: np.ndarray, init_lmbd: np.ndarray,
+def levenberg_marquardt(x: np.ndarray, y: np.ndarray, init_beta: np.ndarray, init_lmbd: float,
                         num_iters: int = 100, velocity: float = 1.1, error_tol: float = 1e-5, lmbd_tol: float = 5):
     beta = np.copy(init_beta)
     lmbd = init_lmbd
@@ -85,7 +90,7 @@ def levenberg_marquardt(x: np.ndarray, y: np.ndarray, init_beta: np.ndarray, ini
     for curr_iter in range(num_iters):
         beta, curr_error = run_single_iteration(x, y, beta, lmbd)
 
-        logging.info(f"Current iteration {curr_iter:>{num_iters_len}}: error={curr_error:.5f} lmbd={lmbd:.5f}")
+        logging.debug(f"Current iteration {curr_iter:>{num_iters_len}}: error={curr_error:.5f} lmbd={lmbd:.5f}")
 
         if curr_error < error_tol:
             logging.warning("Error is lower than the threshold. Early stopping engaged.")
@@ -118,8 +123,8 @@ if __name__ == "__main__":
     configure_logging()
     n = 100
 
-    # target = lambda x: 100 * np.cos(102 * x) + 102 * np.sin(100 * x)
-    # x = np.linspace(0, 100, n)
+    target = lambda x: 100 * np.cos(102 * x) + 102 * np.sin(100 * x)
+    x = np.linspace(0, 100, n)
 
     # target = lambda x: 5 * x + 3
     # x = np.linspace(-10, 10, n)
@@ -128,18 +133,31 @@ if __name__ == "__main__":
     # noise = np.random.randn(100) * 0.1
     # x = np.linspace(-5, 5, n)
 
-    target = lambda x: np.exp(0.3 * x + 0.5)
-    noise = np.random.randn(n) * 0.1
-    x = np.linspace(0, 10, n)
+    # target = lambda x: np.exp(0.3 * x + 0.5)
+    # noise = np.random.randn(n) * 0.1
+    # x = np.linspace(0, 10, n)
 
     y = target(x)
+    init_beta = np.array([100, 100], dtype=np.float32)
+    beta = curve_fit(func_, x, y, init_beta)[0]
+    logging.info(f"curve_fit: {beta}")
 
-    init_beta = np.array([1, 1], dtype=np.float32)
-    init_lmbd = 0.001
-    beta = levenberg_marquardt(x + noise, y, init_beta, init_lmbd)
-    logging.info(f"Solution: {beta}")
+    param_grid = ParameterGrid({"init_lmbd": np.linspace(1e-3, 1e-1, 10),
+                                "velocity": np.linspace(1.1, 2, 5)})
 
-    plt.plot(x + noise, y, color="blue")
-    # plt.plot(x + noise, y, color="green")
-    plt.plot(x + noise, func(x, beta), color="red")
+    results = []
+    for params in param_grid:
+        beta = levenberg_marquardt(x, y, init_beta, **params)
+        curr_error = calc_error(x, y, beta)
+        results.append((curr_error, params, beta))
+
+    results = sorted(results, key=lambda x: x[0])
+    errors = list(map(lambda r: r[0], results))
+
+    beta_lm = results[0][2]
+    logging.info(f"Solution: {beta_lm}")
+
+    plt.plot(x, y, color="blue")
+    plt.plot(x, func_(x, *beta), color="green")
+    plt.plot(x, func(x, beta_lm), color="red")
     plt.show()
