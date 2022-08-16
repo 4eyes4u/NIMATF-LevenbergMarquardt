@@ -90,7 +90,7 @@ def calc_jacobian(func, x: np.ndarray, params: np.ndarray, delta: float = 1e-8):
     m = x.shape[0]
     n = params.shape[0]
 
-    J = np.zeros((m, n), dtype=np.float32)
+    J = np.zeros((m, n), dtype=np_dtype)
     for i in range(m):
         for j in range(n):
             delta_j = np.zeros_like(params)
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     y = target(x)
     plt.plot(x, y, color="blue")
 
-    init_params = np.array([100, 100], dtype=np.float32)
+    init_params = np.array([100, 100], dtype=np_dtype)
 
     params_scipy = curve_fit(func_hard, x, y, init_params)[0]
     logger.info(f"scipy: {params_scipy}")
